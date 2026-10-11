@@ -9,3 +9,5 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.0]
 
 - First release.
+- `follow(path, *, poll, from_start, encoding, max_idle, sleep)`: iterate new complete
+  lines from a growing text file, surviving rotation by rename and recreate or truncate.
