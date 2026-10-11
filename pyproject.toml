@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "followtail"
+version = "0.1.0"
+description = "Follow a growing text file like tail -f, surviving log rotation, yielding new complete lines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Javier Lianes", email = "javier@lianes8studio.com" }]
+keywords = []
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest", "build", "twine"]
+
+[project.urls]
+Homepage = "https://lianes8studio.com"
+Repository = "https://github.com/JaviLianes8/followtail"
+Issues = "https://github.com/JaviLianes8/followtail/issues"
+Changelog = "https://github.com/JaviLianes8/followtail/blob/main/CHANGELOG.md"
+LinkedIn = "https://www.linkedin.com/in/jlianes/"
+Funding = "https://buymeacoffee.com/jlianesglrs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/followtail"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
