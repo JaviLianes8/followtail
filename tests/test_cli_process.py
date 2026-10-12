@@ -55,10 +55,12 @@ def test_the_process_follows_a_live_writer_across_rotation(
         log.rename(tmp_path / "app.log.1")
         writer.write("four\n")
         assert out.get(timeout=GUARD) == "four\n"
-        assert (
-            err.get(timeout=GUARD)
-            == f"followtail: '{log}' has been replaced;  following new file\n"
-        )
+        notice = err.get(timeout=GUARD)
+        if "inaccessible" in notice:  # a poll fell between the rename and the recreate
+            notice = err.get(timeout=GUARD)
+            assert notice == f"followtail: '{log}' has appeared;  following new file\n"
+        else:
+            assert notice == f"followtail: '{log}' has been replaced;  following new file\n"
     finally:
         tail.kill()
         tail.communicate()
