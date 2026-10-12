@@ -4,12 +4,12 @@ Progress:
 - [x] Repo read, main has the real 0.1.0 implementation
 - [x] Ground truth fetched and cited (see Sources)
 - [x] Brainstorm ranked (this file)
-- [ ] Core: held descriptor, drain before switching, follow by name or by descriptor
-- [ ] Typed events, multiple files, Follower step API
-- [ ] Start positions (end, start, last N lines), partial-line policy, encoding errors
-- [ ] Stop signal, total timeout, injectable clock and sleep
-- [ ] Windows shared open (FILE_SHARE_DELETE)
-- [ ] Async iterators
+- [x] Core: held descriptor, drain before switching, follow by name or by descriptor
+- [x] Typed events, multiple files, Follower step API
+- [x] Start positions (end, start, last N lines), partial-line policy, encoding errors
+- [x] Stop signal, total timeout, injectable clock and sleep
+- [x] Windows shared open (FILE_SHARE_DELETE)
+- [x] Async iterators
 - [ ] CLI (`followtail -F file -n N`)
 - [ ] Docs: docstrings, README, GUIDE, CHANGELOG, version 0.2.0
 - [ ] Contract test and real writer process scenarios
