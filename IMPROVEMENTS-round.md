@@ -16,7 +16,7 @@ Progress:
 - [x] GNU tail -F oracle in WSL
 - [ ] Real e2e: wheel, throwaway venv, installed script with a live writer
 - [ ] Gates green (ruff format, ruff check, mypy --strict src, pytest)
-- [ ] PR opened
+- [x] PR opened (#2)
 - [ ] Independent review and fixes
 - [ ] Guard CLEAN after fixes
 
