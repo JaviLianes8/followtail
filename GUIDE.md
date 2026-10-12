@@ -84,6 +84,7 @@ descriptors.
 ```python
 from followtail import follow
 
+
 def wait_for(path, needle, seconds):
     for line in follow(path, timeout=seconds):
         if needle in line:
@@ -100,9 +101,11 @@ from followtail import follow_events
 stop = threading.Event()
 events = queue.Queue()
 
+
 def run():
     for event in follow_events("app.log", stop=stop):
         events.put(event)
+
 
 threading.Thread(target=run, daemon=True).start()
 ...
@@ -113,6 +116,7 @@ stop.set()
 
 ```python
 from followtail import Line, afollow_events
+
 
 async def ship(paths):
     async for event in afollow_events(paths, lines=0, errors="replace"):
@@ -126,9 +130,13 @@ async def ship(paths):
 from followtail import Follower
 
 follower = Follower("app.log", lines=20)
+
+
 def on_timer():
     for event in follower.poll():
         render(event)
+
+
 ...
 follower.close()
 ```
@@ -142,8 +150,10 @@ sleep can append to the file to script what the writer does:
 def test_reads_new_lines(tmp_path):
     log = tmp_path / "a.log"
     log.write_text("")
+
     def sleep(_):
         log.write_text("hello\n")
+
     assert list(follow(log, max_idle=2, sleep=sleep)) == ["hello"]
 ```
 

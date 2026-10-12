@@ -38,6 +38,7 @@ for line in follow("app.log", lines=10):
 
 # Stop after a minute, or when another thread sets the event.
 import threading
+
 stop = threading.Event()
 for line in follow("app.log", timeout=60, stop=stop):
     handle(line)
