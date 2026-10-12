@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import TextIO
 
 from ._events import Appeared, Event, Line, Missing, Rotated, Truncated
+from ._watch import IS_A_DIRECTORY
 
 PROG = "followtail"
 
@@ -13,6 +15,11 @@ PROG = "followtail"
 def warn(message: str) -> None:
     """Print ``followtail: message`` to stderr."""
     print(f"{PROG}: {message}", file=sys.stderr, flush=True)
+
+
+def is_directory(path: str) -> bool:
+    """True for a directory, which GNU ``tail`` reports and skips."""
+    return os.path.isdir(path)
 
 
 class Printer:
@@ -24,13 +31,14 @@ class Printer:
         self._current: str | None = None
         self._first = True
         self._opened: set[str] = set()
-        self._missing: set[str] = set()
+        self.failed: set[str] = set()
 
     def header(self, path: str) -> None:
         """Print the header for ``path`` unless it was the last one printed."""
         if not self._headers or path == self._current:
             return
-        self._out.write(f"{'' if self._first else chr(10)}==> {path} <==\n")
+        gap = "" if self._first else "\n"
+        self._out.write(f"{gap}==> {path} <==\n")
         self._current = path
         self._first = False
 
@@ -47,19 +55,28 @@ class Printer:
         """Record that ``path`` was read once, so a later loss reads as inaccessible."""
         self._opened.add(path)
 
+    def directory(self, path: str, following: bool) -> None:
+        """Report a directory operand the way GNU ``tail`` does."""
+        self.header(path)
+        self.failed.add(path)
+        warn(f"error reading '{path}': {IS_A_DIRECTORY}")
+        if following:
+            warn(f"{path}: cannot follow end of this type of file")
+
     def event(self, event: Event) -> None:
         """Print a line, or the GNU ``tail`` notice for any other event."""
         path = event.path
         if isinstance(event, Line):
             self._opened.add(path)
             self.line(path, event.text, event.complete)
-            return
-        if isinstance(event, Missing):
-            self._missing.add(path)
-            if path in self._opened:
-                warn(f"'{path}' has become inaccessible: No such file or directory")
+        elif isinstance(event, Missing):
+            self.failed.add(path)
+            if event.reason == IS_A_DIRECTORY:
+                self.directory(path, following=True)
+            elif path in self._opened:
+                warn(f"'{path}' has become inaccessible: {event.reason}")
             else:
-                warn(f"cannot open '{path}' for reading: No such file or directory")
+                warn(f"cannot open '{path}' for reading: {event.reason}")
         elif isinstance(event, Appeared):
             self._opened.add(path)
             warn(f"'{path}' has appeared;  following new file")
@@ -67,8 +84,3 @@ class Printer:
             warn(f"'{path}' has been replaced;  following new file")
         elif isinstance(event, Truncated):
             warn(f"{path}: file truncated")
-
-    @property
-    def missing(self) -> set[str]:
-        """Paths that were reported missing at least once."""
-        return set(self._missing)

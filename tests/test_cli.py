@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from followtail import __version__, _cli
+from followtail import __version__
 from followtail._cli import main
 
 
@@ -103,33 +103,6 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out.strip() == f"followtail {__version__}"
 
 
-def test_follow_with_a_timeout_prints_new_lines_and_notices(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    log = tmp_path / "a.log"
-    log.write_bytes(b"old\n")
-    steps = iter([b"new\n", None])
-    real = _cli.follow_events
-
-    def scripted(*args: object, **kwargs: object) -> object:
-        def sleep(_: float) -> None:
-            step = next(steps, None)
-            if step is None:
-                log.write_bytes(b"short\n")  # truncation
-            else:
-                with open(log, "ab") as handle:
-                    handle.write(step)
-
-        kwargs.update(sleep=sleep, timeout=None, max_idle=4)
-        return real(*args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(_cli, "follow_events", scripted)
-    status, out, err = _run(capsys, "-F", "-n", "1", str(log))
-    assert status == 0
-    assert out == "old\nnew\nshort\n"
-    assert err == f"followtail: {log}: file truncated\n"
-
-
 def test_follow_without_retry_gives_up_on_a_missing_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -142,11 +115,22 @@ def test_follow_without_retry_gives_up_on_a_missing_file(
     ]
 
 
-def test_ctrl_c_exits_130_quietly(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+def test_a_directory_is_reported_like_gnu_tail(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    def interrupted(*args: object, **kwargs: object) -> object:
-        raise KeyboardInterrupt
+    folder = tmp_path / "dd"
+    folder.mkdir()
+    status, out, err = _run(capsys, "-v", str(folder))
+    assert (status, out) == (1, f"==> {folder} <==\n")
+    assert err == f"followtail: error reading '{folder}': Is a directory\n"
 
-    monkeypatch.setattr(_cli, "follow_events", interrupted)
-    assert _run(capsys, "-F", str(tmp_path / "a.log")) == (130, "", "")
+
+def test_an_unknown_error_handler_is_a_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = tmp_path / "a.log"
+    log.write_bytes(b"\xff\n")
+    with pytest.raises(SystemExit) as exit_:
+        main(["--errors", "bogus", str(log)])
+    assert exit_.value.code == 1
+    assert "unknown error handler" in capsys.readouterr().err

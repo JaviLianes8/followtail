@@ -151,8 +151,7 @@ def test_rotations_under_a_free_running_writer_keep_every_line(
             start = generation * 400
             writer.send("burst", wait=False, prefix="g", start=start, count=400, pause=0)
             expected += [f"g{number}" for number in range(start, start + 400)]
-            last = [expected[-1]]
-            got = poll_until(follower, lambda got, last=last: texts(got)[-1:] == last, [])
+            got = poll_until(follower, _ends_with(expected[-1]), [])
             events += got
             writer.ack()
             writer.send("close")
@@ -160,3 +159,7 @@ def test_rotations_under_a_free_running_writer_keep_every_line(
             log.write_bytes(b"")  # logrotate "create": the new file exists at once
     assert texts(events) == expected
     assert sum(isinstance(event, Rotated) for event in events) == 4
+
+
+def _ends_with(text: str) -> Callable[[list[Event]], bool]:
+    return lambda got: texts(got)[-1:] == [text]

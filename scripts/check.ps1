@@ -7,5 +7,7 @@ ruff check .
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 mypy --strict src
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+mypy src tests
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 pytest
 exit $LASTEXITCODE
