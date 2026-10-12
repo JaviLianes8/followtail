@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(scope="module")
 def installed(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     """Yield the path of the installed ``followtail`` console script."""
+    if importlib.util.find_spec("ensurepip") is None:
+        pytest.skip("this Python cannot create a venv with pip (no ensurepip)")
     work = tmp_path_factory.mktemp("e2e")
     wheels = work / "wheels"
     # Reuse a locally installed build backend when there is one, so the test also
