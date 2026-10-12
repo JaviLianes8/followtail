@@ -10,7 +10,7 @@ Progress:
 - [x] Stop signal, total timeout, injectable clock and sleep
 - [x] Windows shared open (FILE_SHARE_DELETE)
 - [x] Async iterators
-- [ ] CLI (`followtail -F file -n N`)
+- [x] CLI (`followtail -F file -n N`)
 - [ ] Docs: docstrings, README, GUIDE, CHANGELOG, version 0.2.0
 - [ ] Contract test and real writer process scenarios
 - [ ] GNU tail -F oracle in WSL

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import io
 import os
 import sys
@@ -51,13 +52,20 @@ if sys.platform == "win32":
     _FILE_ATTRIBUTE_NORMAL = 0x80
     _INVALID_HANDLE = wintypes.HANDLE(-1).value
 
+    def _message(code: int) -> str:
+        # Same English wording as the built-in open() for the common cases.
+        mapped = OSError(0, "", None, code).errno
+        if mapped in (errno.ENOENT, errno.EACCES):
+            return os.strerror(mapped)
+        return ctypes.FormatError(code).strip()
+
     def _open_fd(path: str) -> int:
         handle = _create_file(
             path, _GENERIC_READ, _SHARE_ALL, None, _OPEN_EXISTING, _FILE_ATTRIBUTE_NORMAL, None
         )
         if handle is None or handle == _INVALID_HANDLE:
             code = ctypes.get_last_error()
-            raise OSError(0, ctypes.FormatError(code).strip(), path, code)
+            raise OSError(0, _message(code), path, code)
         try:
             return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
         except OSError:
