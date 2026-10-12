@@ -151,3 +151,12 @@ def test_ctrl_c_exits_130_quietly(
     log.write_bytes(b"seen\n")
     assert main(["-F", str(log)]) == 130
     assert capsys.readouterr() == ("seen\n", "")
+
+
+def test_plus_n_never_skips_lines_appended_later(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], script: Callable[..., None]
+) -> None:
+    log = tmp_path / "a.log"
+    log.write_bytes(b"")
+    script(_append(log, b"new 1\nnew 2\n"))
+    assert _run(capsys, "-F", "-n", "+3", str(log))[1] == "new 1\nnew 2\n"

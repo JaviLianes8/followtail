@@ -1,7 +1,9 @@
 """Oracle: GNU ``tail -F`` and ``followtail -F`` must print the same thing.
 
 The scenario in ``oracle_scenario.py`` (appends, a line written in two parts,
-copytruncate, an atomic create rotation, deletion and recreation, a burst) runs under
+copytruncate, an atomic create rotation, deletion and recreation, a burst) and a
+second one with several operands (headers, an empty file, a file missing at start, a
+directory, ``-n +N`` with lines appended later) run under
 GNU coreutils ``tail`` in polling mode and in inotify mode, and under followtail, all
 following the same file on a Linux filesystem. On Windows it runs inside WSL. GNU
 ``tail`` is looked up as ``gnutail`` (Ubuntu ships uutils as ``tail``) or as a ``tail``
@@ -86,3 +88,11 @@ def test_the_notices_match_gnu_tail_word_for_word(outputs: dict[str, str]) -> No
         "has become inaccessible: No such file or directory",
         "has appeared;  following new file",
     ]
+
+
+def test_several_files_match_gnu_tail_headers_and_notices(outputs: dict[str, str]) -> None:
+    ours = outputs["several_followtail_err"].replace("followtail: ", "PROG: ")
+    for mode in ("gnu_poll", "gnu_inotify"):
+        assert outputs["several_followtail_out"] == outputs[f"several_{mode}_out"]
+        assert ours == outputs[f"several_{mode}_err"].replace(f"{outputs['tail']}: ", "PROG: ")
+    assert "==> dd <==" in outputs["several_followtail_out"]

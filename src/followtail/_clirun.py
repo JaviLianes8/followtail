@@ -37,6 +37,21 @@ def _lines_of(path: str, from_line: bool, count: int) -> Iterator[tuple[bytes, b
                 yield line, False
 
 
+def _initial_lines(path: str, limit: int) -> int:
+    """How many complete lines ``path`` has now, counting no further than ``limit``."""
+    seen = 0
+    try:
+        with open_shared(path) as raw:
+            while seen < limit:
+                chunk = raw.read(64 * 1024)
+                if not chunk:
+                    break
+                seen += chunk.count(b"\n")
+    except OSError:
+        return 0
+    return min(seen, limit)
+
+
 def print_once(args: argparse.Namespace, printer: Printer) -> int:
     """``tail -n``: print the selected lines of every file and return the status."""
     from_line, count = args.lines
@@ -70,7 +85,9 @@ def follow(args: argparse.Namespace, printer: Printer) -> int:
             printer.directory(path, following=True)
         warn("no files remaining")
         return 1
-    skip = {path: max(count, 1) - 1 if from_line else 0 for path in paths}
+    wanted = max(count, 1) - 1 if from_line else 0
+    # -n +N skips lines of the content present at start only, never appended lines.
+    skip = {path: _initial_lines(path, wanted) for path in paths}
 
     def show(event: Event) -> None:
         if isinstance(event, (Rotated, Truncated, Appeared)):
