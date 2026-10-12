@@ -9,9 +9,11 @@ import sys
 
 Identity = tuple[int, int]
 
-# Windows reports a file that was deleted while another handle still holds it as
-# "delete pending" (access denied) until that handle closes; treat it as gone.
-_GONE_WINERRORS = frozenset({2, 3, 5, 32, 303})
+NOT_FOUND = os.strerror(errno.ENOENT)
+# ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, and ERROR_DELETE_PENDING: on file systems
+# without POSIX delete semantics a deleted file keeps its name until the last handle
+# to it closes, and opening it meanwhile fails with this code.
+_MISSING_WINERRORS = frozenset({2, 3, 303})
 
 
 def identity_of(status: os.stat_result) -> Identity:
@@ -19,12 +21,20 @@ def identity_of(status: os.stat_result) -> Identity:
     return (status.st_dev, status.st_ino)
 
 
-def is_gone(error: OSError) -> bool:
-    """True when ``error`` means the name no longer leads to a readable file."""
+def unavailable(error: OSError) -> str | None:
+    """Why ``error`` means the path cannot be read now (to retry later), else None.
+
+    Missing files and permission problems (including a Windows sharing violation or a
+    pending delete) are conditions to report and retry, as ``tail --retry`` does; any
+    other error is a real failure for the caller.
+    """
     if isinstance(error, FileNotFoundError):
-        return True
-    winerror = getattr(error, "winerror", None)
-    return isinstance(error, PermissionError) or winerror in _GONE_WINERRORS
+        return NOT_FOUND
+    if getattr(error, "winerror", None) in _MISSING_WINERRORS:
+        return NOT_FOUND
+    if isinstance(error, PermissionError):
+        return os.strerror(errno.EACCES)
+    return None
 
 
 if sys.platform == "win32":

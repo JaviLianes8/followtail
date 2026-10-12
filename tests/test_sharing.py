@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from followtail import Follower, Line, Rotated
+from followtail import Appeared, Follower, Line, Missing, Rotated
 
 windows_only = pytest.mark.skipif(sys.platform != "win32", reason="Windows sharing rules")
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX rename semantics")
@@ -61,3 +61,27 @@ def test_an_atomic_replace_of_the_name_is_a_rotation(tmp_path: Path) -> None:
         events = follower.poll()
     path = str(log)
     assert events == [Line(path, "old tail"), Rotated(path), Line(path, "new head")]
+
+
+@windows_only
+def test_a_file_held_exclusively_is_reported_and_retried(tmp_path: Path) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    log = tmp_path / "locked.log"
+    log.write_bytes(b"hello\n")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                     wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
+                                     wintypes.HANDLE]  # fmt: skip
+    # Share mode 0: nobody else may open the file while this handle is open.
+    handle = kernel32.CreateFileW(str(log), 0x80000000, 0, None, 3, 0x80, None)
+    assert handle not in (None, wintypes.HANDLE(-1).value)
+    with Follower(log, from_start=True) as follower:
+        try:
+            assert follower.poll() == [Missing(str(log), "Permission denied")]
+            assert follower.poll() == []
+        finally:
+            kernel32.CloseHandle(wintypes.HANDLE(handle))
+        assert follower.poll() == [Appeared(str(log)), Line(str(log), "hello")]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import io
 import os
 from dataclasses import dataclass
@@ -10,13 +11,14 @@ from typing import Literal
 from ._assembler import Assembler
 from ._events import Appeared, Event, Missing, Rotated, Truncated
 from ._lastlines import tail_offset
-from ._open import Identity, identity_of, is_gone, open_shared
+from ._open import Identity, identity_of, open_shared, unavailable
 
 _CHUNK = 64 * 1024
 # Bytes read per file per poll, so replaying a huge file never loads it at once.
 BUDGET = 1024 * 1024
 
 Start = Literal["end", "start"] | int
+IS_A_DIRECTORY = os.strerror(errno.EISDIR)
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,7 @@ class Watch:
         self._identity: Identity | None = None
         self._offset = 0
         self._attempted = False
-        self._missing = False
+        self._missing: str | None = None
         self._stale = False
 
     def close(self) -> None:
@@ -96,33 +98,36 @@ class Watch:
     def _open(self, replaced: bool = False) -> bool:
         first = not self._attempted
         self._attempted = True
-        try:
-            if os.path.isdir(self.path):
-                raise IsADirectoryError(f"is a directory: {self.path!r}")
-            handle = open_shared(self.path)
-        except IsADirectoryError:
-            raise
-        except OSError as error:
-            if not is_gone(error):
-                raise
-            self._gone(first)
+        if os.path.isdir(self.path):
+            self._gone(first, IS_A_DIRECTORY, give_up=True)
             return False
-        status = os.fstat(handle.fileno())
+        try:
+            handle = open_shared(self.path)
+        except OSError as error:
+            reason = unavailable(error)
+            if reason is None:
+                raise
+            self._gone(first, reason)
+            return False
+        try:
+            status = os.fstat(handle.fileno())
+            offset = self._initial_offset(handle, status.st_size) if first else 0
+        except BaseException:
+            handle.close()
+            raise
         self._handle = handle
         self._identity = identity_of(status)
-        if first:
-            self._offset = self._initial_offset(handle, status.st_size)
-        else:
-            self._offset = 0
+        self._offset = offset
+        if not first:
             self._lines.event(Rotated(self.path) if replaced else Appeared(self.path))
-        self._missing = False
+        self._missing = None
         return True
 
-    def _gone(self, first: bool) -> None:
-        if not self._missing:
-            self._missing = True
-            self._lines.event(Missing(self.path))
-        if not self._options.retry and (first or self._options.by == "name"):
+    def _gone(self, first: bool, reason: str, give_up: bool = False) -> None:
+        if self._missing != reason:
+            self._missing = reason
+            self._lines.event(Missing(self.path, reason))
+        if give_up or (not self._options.retry and (first or self._options.by == "name")):
             self.dropped = True
 
     def _initial_offset(self, handle: io.FileIO, size: int) -> int:
@@ -157,7 +162,7 @@ class Watch:
         try:
             status = os.stat(self.path)
         except OSError as error:
-            if not is_gone(error):
+            if unavailable(error) is None:
                 raise
             return True
         return identity_of(status) != self._identity

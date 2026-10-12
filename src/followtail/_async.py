@@ -74,7 +74,13 @@ async def _run(
 ) -> AsyncGenerator[Event, None]:
     try:
         while not follower.done:
-            for event in follower.poll():
+            try:
+                events = follower.poll()
+            except UnicodeDecodeError:
+                for event in follower._take_carried():
+                    yield event
+                raise
+            for event in events:
                 yield event
             delay = pacer.next_wait(follower.moved)
             if delay is None:

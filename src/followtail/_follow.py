@@ -93,7 +93,12 @@ def _run(
 ) -> Generator[Event, None, None]:
     try:
         while not follower.done:
-            yield from follower.poll()
+            try:
+                events = follower.poll()
+            except UnicodeDecodeError:
+                yield from follower._take_carried()
+                raise
+            yield from events
             delay = pacer.next_wait(follower.moved)
             if delay is None:
                 break

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import codecs
+import errno
 import os
 from collections.abc import Iterable
 from types import TracebackType
@@ -48,8 +49,9 @@ def _options(
         raise ValueError(f"by must be 'name' or 'descriptor', got {by!r}")
     if partial not in ("wait", "flush"):
         raise ValueError(f"partial must be 'wait' or 'flush', got {partial!r}")
-    if max_line is not None and (isinstance(max_line, bool) or max_line < 1):
-        raise ValueError(f"max_line must be >= 1, got {max_line!r}")
+    if max_line is not None and (isinstance(max_line, bool) or max_line < 4):
+        # Four bytes is the longest UTF-8 character, so a cut always fits one whole.
+        raise ValueError(f"max_line must be >= 4, got {max_line!r}")
     check_encoding(encoding)
     try:
         codecs.lookup_error(errors)
@@ -91,7 +93,11 @@ class Follower:
         options = _options(
             by, retry, partial, _start(from_start, lines), encoding, errors, max_line
         )
+        for name in names:
+            if os.path.isdir(name):
+                raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), name)
         self._watches = [Watch(name, options) for name in names]
+        self._carried: list[Event] = []
         self._moved = False
         self._closed = False
 
@@ -113,25 +119,37 @@ class Follower:
     def poll(self) -> list[Event]:
         """Read every file once and return the new events, oldest first. Never blocks.
 
-        Raises ``UnicodeDecodeError`` for an undecodable line when ``errors="strict"``;
-        the bad line is skipped and the next call carries on with the rest.
+        Raises ``UnicodeDecodeError`` for an undecodable line when ``errors="strict"``.
+        Only that line is lost: the events read before it are returned first by the
+        next call, followed by everything after it.
         """
         if self._closed:
             raise ValueError("poll() on a closed Follower")
-        events: list[Event] = []
+        events, self._carried = self._carried, []
         moved = False
         try:
             for watch in self._watches:
                 moved = watch.poll(events) or moved
-        finally:
-            self._moved = moved or bool(events)
+        except UnicodeDecodeError:
+            self._carried, self._moved = events, True
+            raise
+        self._moved = moved or bool(events)
         return events
 
     def flush(self) -> list[Event]:
         """Return every buffered fragment as an incomplete line, emptying the buffers."""
-        events: list[Event] = []
-        for watch in self._watches:
-            watch.flush(events)
+        events, self._carried = self._carried, []
+        try:
+            for watch in self._watches:
+                watch.flush(events)
+        except UnicodeDecodeError:
+            self._carried = events
+            raise
+        return events
+
+    def _take_carried(self) -> list[Event]:
+        """Events read before a ``UnicodeDecodeError`` and not yet returned."""
+        events, self._carried = self._carried, []
         return events
 
     def close(self) -> None:

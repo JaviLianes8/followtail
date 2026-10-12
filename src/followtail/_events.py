@@ -43,13 +43,18 @@ class Rotated:
 
 @dataclass(frozen=True, slots=True)
 class Missing:
-    """``path`` cannot be opened: it does not exist yet, or it was deleted or renamed.
+    """``path`` cannot be read: it does not exist (yet), or was deleted or renamed.
 
-    With ``retry=True`` the name keeps being checked and :class:`Appeared` follows once
-    it is back. With ``retry=False`` the file is dropped.
+    ``reason`` is the system message, in the words of GNU ``tail``: ``"No such file
+    or directory"``, ``"Permission denied"`` (also a file another process holds
+    exclusively) or ``"Is a directory"``. With ``retry=True`` the name keeps being
+    checked and :class:`Appeared` follows once it can be read; a reason change is
+    reported again. With ``retry=False``, and always for a directory, the path is
+    dropped.
     """
 
     path: str
+    reason: str = "No such file or directory"
 
 
 @dataclass(frozen=True, slots=True)
