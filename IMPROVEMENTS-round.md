@@ -14,8 +14,8 @@ Progress:
 - [x] Docs: docstrings, README, GUIDE, CHANGELOG, version 0.2.0
 - [x] Contract test and real writer process scenarios
 - [x] GNU tail -F oracle in WSL
-- [ ] Real e2e: wheel, throwaway venv, installed script with a live writer
-- [ ] Gates green (ruff format, ruff check, mypy --strict src, pytest)
+- [x] Real e2e: wheel, throwaway venv, installed script with a live writer
+- [x] Gates green (ruff format, ruff check, mypy --strict src, pytest)
 - [x] PR opened (#2)
 - [ ] Independent review and fixes
 - [ ] Guard CLEAN after fixes
