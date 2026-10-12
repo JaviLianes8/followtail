@@ -17,8 +17,8 @@ Progress:
 - [x] Real e2e: wheel, throwaway venv, installed script with a live writer
 - [x] Gates green (ruff format, ruff check, mypy --strict src, pytest)
 - [x] PR opened (#2)
-- [ ] Independent review and fixes
-- [ ] Guard CLEAN after fixes
+- [x] Independent review and fixes
+- [x] Guard CLEAN after fixes
 
 ## Sources (fetched 2026-10-12)
 
