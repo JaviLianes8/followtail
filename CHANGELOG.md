@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- `follow_events`: typed events (`Line`, `Truncated`, `Rotated`, `Missing`,
+  `Appeared`) for one path or several, each carrying its path.
+- `Follower`: one non-blocking `poll()` step for callers with their own loop, with
+  `flush()`, `close()` and context manager support.
+- `afollow` and `afollow_events`: async iterators with an injectable async sleep.
+- `read_last_lines(path, n)`: the last lines of a file, read backwards in blocks.
+- New keywords on `follow`: `by` (`"name"` or `"descriptor"`), `retry`, `lines`
+  (start N lines before the end), `partial` (`"wait"` or `"flush"`), `errors`,
+  `max_line`, `stop`, `timeout` and `clock`.
+- `followtail` command line tool (`-f`, `-F`, `--follow`, `--retry`, `-n [+]N`, `-s`,
+  `--timeout`, `-q`, `-v`) with GNU `tail` style notices; `python -m followtail` too.
+
+### Changed
+
+- One descriptor is held per file and the name is checked on every poll. On a rename
+  and recreate the old file is now read to its end before switching, so lines
+  appended just before a rotation are no longer lost.
+- On Windows files are opened with `FILE_SHARE_DELETE`, so a followed file can still
+  be renamed or deleted by its writer.
+- A file that appears after following started is read from its first byte (as
+  `tail -F` does) instead of from its size when first seen.
+- A fragment pending when its file is rotated, truncated or deleted is emitted as a
+  `Line` with `complete=False` instead of being dropped.
+- Invalid settings raise `ValueError` or `TypeError` when `follow` is called, and
+  encodings that do not encode a newline as the byte `\n` (UTF-16, UTF-32) are rejected.
+
 ## [0.1.0]
 
 - First release.

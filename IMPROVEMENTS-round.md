@@ -11,7 +11,7 @@ Progress:
 - [x] Windows shared open (FILE_SHARE_DELETE)
 - [x] Async iterators
 - [x] CLI (`followtail -F file -n N`)
-- [ ] Docs: docstrings, README, GUIDE, CHANGELOG, version 0.2.0
+- [x] Docs: docstrings, README, GUIDE, CHANGELOG, version 0.2.0
 - [x] Contract test and real writer process scenarios
 - [x] GNU tail -F oracle in WSL
 - [ ] Real e2e: wheel, throwaway venv, installed script with a live writer
