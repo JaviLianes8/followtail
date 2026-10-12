@@ -93,6 +93,7 @@ class Follower:
         )
         self._watches = [Watch(name, options) for name in names]
         self._moved = False
+        self._closed = False
 
     @property
     def paths(self) -> list[str]:
@@ -115,6 +116,8 @@ class Follower:
         Raises ``UnicodeDecodeError`` for an undecodable line when ``errors="strict"``;
         the bad line is skipped and the next call carries on with the rest.
         """
+        if self._closed:
+            raise ValueError("poll() on a closed Follower")
         events: list[Event] = []
         moved = False
         try:
@@ -132,7 +135,8 @@ class Follower:
         return events
 
     def close(self) -> None:
-        """Close every held descriptor. Safe to call more than once."""
+        """Close every held descriptor; later polls raise. Safe to call more than once."""
+        self._closed = True
         for watch in self._watches:
             watch.close()
 

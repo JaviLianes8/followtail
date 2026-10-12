@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Literal
 
 from ._events import Event, Line
@@ -104,7 +104,7 @@ def afollow(
     stop: StopSignal | None = None,
     timeout: float | None = None,
     clock: Callable[[], float] = time.monotonic,
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str, None]:
     """Async form of :func:`followtail.follow`: yield the text of each new line.
 
     >>> async for line in afollow("app.log", timeout=30):  # doctest: +SKIP

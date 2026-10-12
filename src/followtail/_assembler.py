@@ -32,23 +32,16 @@ class Assembler:
 
     def feed(self, chunk: bytes) -> None:
         """Append ``chunk`` and queue every line it completes."""
-        lines, self._buffer = split_lines(self._buffer + chunk)
-        self._queue.extend((raw, True) for raw in lines)
-        limit = self._max_line
-        while limit is not None and len(self._buffer) > limit:
-            cut = self._cut_point(limit)
-            self._queue.append((self._buffer[:cut], False))
-            self._buffer = self._buffer[cut:]
+        lines, rest = split_lines(self._buffer + chunk)
+        for raw in lines:
+            self._queue.append((self._cut(raw), True))
+        self._buffer = self._cut(rest)
 
     def flush(self) -> None:
         """Queue the buffered fragment, if any, as an incomplete line."""
         if self._buffer:
             self._queue.append((self._buffer, False))
             self._buffer = b""
-
-    def discard(self) -> None:
-        """Forget the buffered fragment."""
-        self._buffer = b""
 
     def event(self, event: Event) -> None:
         """Queue a non-line event after the lines already queued."""
@@ -67,10 +60,15 @@ class Assembler:
                 item = Line(self._path, raw.decode(self._encoding, self._errors), complete)
             into.append(item)
 
-    def _cut_point(self, limit: int) -> int:
-        cut = limit
-        if self._utf8:
-            # Never split a UTF-8 sequence: back off over continuation bytes.
-            while cut > 1 and limit - cut < 3 and self._buffer[cut] & 0xC0 == 0x80:
-                cut -= 1
-        return cut
+    def _cut(self, data: bytes) -> bytes:
+        """Queue ``max_line`` sized fragments off the front of ``data``; return the rest."""
+        limit = self._max_line
+        while limit is not None and len(data) > limit:
+            cut = limit
+            if self._utf8:
+                # Never split a UTF-8 sequence: back off over continuation bytes.
+                while cut > limit - 3 and cut > 1 and data[cut] & 0xC0 == 0x80:
+                    cut -= 1
+            self._queue.append((data[:cut], False))
+            data = data[cut:]
+        return data

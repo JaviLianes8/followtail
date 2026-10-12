@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator
 from typing import Literal
 
 from ._events import Event, Line
@@ -122,7 +122,7 @@ def follow(
     stop: StopSignal | None = None,
     timeout: float | None = None,
     clock: Callable[[], float] = time.monotonic,
-) -> Iterator[str]:
+) -> Generator[str, None, None]:
     """Yield new lines from ``path`` as it grows, like ``tail -F``.
 
     The simple form of :func:`follow_events` for one file: it yields only the text of
@@ -154,7 +154,7 @@ def follow(
     return _texts(events)
 
 
-def _texts(events: Generator[Event, None, None]) -> Iterator[str]:
+def _texts(events: Generator[Event, None, None]) -> Generator[str, None, None]:
     try:
         for event in events:
             if isinstance(event, Line):
