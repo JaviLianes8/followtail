@@ -8,7 +8,12 @@ Each followed path keeps one open descriptor and a read position. Every poll:
 
 1. If no descriptor is held, try to open the path. A file that exists when following
    starts is positioned by `from_start` / `lines` (default: its end). A file that
-   appears later is read from its first byte, as GNU `tail -F` does.
+   appears later is read from its first byte, as GNU `tail -F` does. A path that
+   cannot be read is reported once as `Missing` with its reason: `No such file or
+   directory`, `Permission denied` (also a file another process holds exclusively,
+   which Windows reports as a sharing violation) or `Is a directory`. A directory is
+   dropped; anything else is retried on every poll when `retry=True`. A path that is a
+   directory when following starts raises `IsADirectoryError` at once.
 2. If the file is now shorter than the read position, it was truncated: a pending
    fragment is emitted, `Truncated` is reported and reading restarts at byte 0.
 3. Read what was appended, at most 1 MiB per file per poll, so replaying a huge file
@@ -24,7 +29,7 @@ With `by="descriptor"` step 4 never runs: the file first opened is followed even
 it is renamed or deleted, like `tail -f`. Truncation is still detected.
 
 This is what GNU `tail -F` does in polling mode. The tests run GNU coreutils `tail`
-(polling and inotify) and followtail on the same file with the same writer and require
+(polling and inotify) and followtail on the same files with the same writer and require
 the same output and the same notices.
 
 ### What polling cannot see
@@ -55,15 +60,22 @@ The `partial` policy decides when an unterminated fragment is emitted:
 `"flush"` suits prompts and progress output that never end in a newline. After a
 flushed fragment, the rest of that line arrives as its own `Line`.
 
-`max_line=N` caps memory for files that might never contain a newline: longer lines are
-cut into fragments of at most N bytes (never inside a UTF-8 character).
+`max_line=N` (N >= 4) caps memory for files that might never contain a newline: longer
+lines are cut into fragments of at most N bytes, never inside a UTF-8 character. A
+carriage return at the very end of the buffer is not counted, so a CRLF is never split
+into an extra empty line. Without `max_line` a long line is buffered in linear time.
+
+`follow` and `afollow` yield the text of fragments like any other line; use the event
+iterators when the difference matters.
 
 ### Decode errors
 
-With `errors="strict"` an undecodable line raises `UnicodeDecodeError` from the
-iterator, which ends it. With `Follower.poll()` the bad line is skipped and the next
-call carries on with everything queued after it. For logs you do not control, pass
-`errors="replace"` (the command line default) or `"backslashreplace"`.
+With `errors="strict"` an undecodable line raises `UnicodeDecodeError`. Only that line
+is lost. The iterators first yield every line read before it, then raise, which ends
+them. `Follower.poll()` raises too, and its next call returns the events read before
+the bad line, followed by everything after it, from every followed file. For logs you
+do not control, pass `errors="replace"` (the command line default) or
+`"backslashreplace"`.
 
 ## Ending the iteration
 
@@ -74,8 +86,9 @@ call carries on with everything queued after it. For logs you do not control, pa
   wait is cut short so it never sleeps past the deadline.
 
 On a stop or a timeout one final poll runs, so lines written just before are delivered.
-Breaking out of the loop, or calling `close()` on the generator, releases the
-descriptors.
+Breaking out of a `for` loop, or calling `close()` on the generator, releases the
+descriptors. An async generator left early is only finalized later by the event loop;
+use `async with contextlib.aclosing(afollow(...)) as lines:` to release them at once.
 
 ## Recipes
 
@@ -171,10 +184,20 @@ imposes two limits:
   process, whatever the share mode. Rotate in two steps: rename the old file away, then
   create the new one.
 
+On NTFS with current Windows versions a deleted file disappears from its folder at once
+even while followtail holds it. File systems without POSIX delete semantics (FAT, some
+network shares) keep the name in a "delete pending" state until the last handle closes;
+followtail closes its handle at its next poll, so a writer recreating the file in that
+instant may fail once. File identity (volume serial and file index) was checked on
+NTFS.
+
 ## Command line
 
 `followtail [-f | -F | --follow[=name|descriptor]] [--retry] [-n [+]N] [-s SECONDS]
-[--timeout SECONDS] [--partial wait|flush] [--encoding E] [--errors H] [-q | -v] FILE...`
+[--timeout SECONDS] [--partial flush|wait] [--encoding E] [--errors H] [-q | -v] FILE...`
+
+As in GNU `tail`, the value of `--follow` must be attached with `=`: `--follow app.log`
+follows `app.log` by descriptor.
 
 - Without `-f` / `-F` it prints the last N lines (default 10) and exits; `-n +N` starts
   at line N. An unterminated last line is printed without a newline.
@@ -183,5 +206,13 @@ imposes two limits:
   remaining` once none is left.
 - Notices on stderr use the GNU wording. Lines are written and flushed as they arrive,
   so `followtail -F app.log | grep ERROR` sees each line at once.
+- Several files get a `==> name <==` header each at start, even when empty, and again
+  whenever output switches file. A directory operand gets its header, `error reading
+  'dd': Is a directory` and `dd: cannot follow end of this type of file`, and is skipped.
+- `-n +N` skips the first N - 1 lines present at start; lines appended later are never
+  skipped.
+- `--partial flush` (the default here) shows a line still being written once it has
+  been idle for one interval, so the output matches GNU `tail` byte for byte; `--partial
+  wait` prints complete lines only.
 - Exit status: 0, 1 on any error (usage included), 130 on Ctrl+C. A closed output pipe
   ends the tool quietly with 0.

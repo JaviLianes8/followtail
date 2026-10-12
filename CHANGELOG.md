@@ -19,8 +19,9 @@ All notable changes to this project are documented here. The format follows
 - New keywords on `follow`: `by` (`"name"` or `"descriptor"`), `retry`, `lines`
   (start N lines before the end), `partial` (`"wait"` or `"flush"`), `errors`,
   `max_line`, `stop`, `timeout` and `clock`.
-- `followtail` command line tool (`-f`, `-F`, `--follow`, `--retry`, `-n [+]N`, `-s`,
-  `--timeout`, `-q`, `-v`) with GNU `tail` style notices; `python -m followtail` too.
+- `followtail` command line tool (`-f`, `-F`, `--follow[=HOW]`, `--retry`, `-n [+]N`,
+  `-s`, `--timeout`, `--partial`, `-q`, `-v`) whose output and notices match GNU
+  `tail`; `python -m followtail` too.
 
 ### Changed
 
@@ -32,8 +33,18 @@ All notable changes to this project are documented here. The format follows
 - A file that appears after following started is read from its first byte (as
   `tail -F` does) instead of from its size when first seen.
 - A fragment pending when its file is rotated, truncated or deleted is emitted as a
-  `Line` with `complete=False` instead of being dropped.
-- Invalid settings raise `ValueError` or `TypeError` when `follow` is called, and
+  `Line` with `complete=False` instead of being dropped; `follow` yields its text like
+  any other line.
+- A file that cannot be read for lack of permission (on Windows also one held
+  exclusively by another process) is reported as `Missing(path, reason)` and retried,
+  as `tail --retry` does, instead of raising `PermissionError`.
+- A poll that read bytes without completing a line (a partial write) now counts as
+  activity, so it resets the `max_idle` count.
+- A strict decode error loses only the undecodable line: the lines read before it are
+  yielded first.
+- Invalid settings (including a negative `poll` or `max_idle`) raise `ValueError` or
+  `TypeError` when `follow` is called rather than on the first iteration, a directory
+  raises `IsADirectoryError` at that point, and
   encodings that do not encode a newline as the byte `\n` (UTF-16, UTF-32) are rejected.
 
 ## [0.1.0]

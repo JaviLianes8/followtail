@@ -58,7 +58,9 @@ for event in follow_events(["api.log", "worker.log"], lines=0):
 ```
 
 Events are `Line`, `Truncated`, `Rotated`, `Missing` and `Appeared`; each carries the
-path it belongs to.
+path it belongs to. `Missing.reason` says why a path cannot be read (`No such file or
+directory`, `Permission denied`, `Is a directory`), and `Line.complete` is `False` for
+a fragment: a line cut short by a rotation, a `max_line` cut or `partial="flush"`.
 
 ### Async
 
@@ -68,6 +70,9 @@ from followtail import afollow
 async for line in afollow("app.log", lines=10):
     await publish(line)
 ```
+
+To release the file promptly when leaving the loop early, wrap it in
+`contextlib.aclosing(afollow(...))`.
 
 ### Your own loop
 
@@ -94,11 +99,12 @@ All keyword only, shared by `follow`, `follow_events`, `afollow`, `afollow_event
 | `lines` | `None` | start this many lines before the end (`tail -n`) |
 | `partial` | `"wait"` | `"flush"` also emits a fragment left unterminated for a whole poll |
 | `encoding`, `errors` | `"utf-8"`, `"strict"` | decoding; use `errors="replace"` for untrusted logs |
-| `max_line` | `None` | cut longer lines into fragments of at most this many bytes |
+| `max_line` | `None` | cut longer lines into fragments of at most this many bytes (at least 4) |
 | `max_idle`, `stop`, `timeout` | `None` | ways to end the iteration |
 | `sleep`, `clock` | stdlib | injectable for tests |
 
 Lines come without their newline; one trailing carriage return (CRLF files) is removed.
+`follow` yields fragments as plain text too; `follow_events` tells them apart.
 `read_last_lines(path, n)` returns the last lines of a file without following it.
 
 ## Command line
@@ -108,13 +114,17 @@ followtail -n 5 app.log              print the last 5 lines and exit
 followtail -F /var/log/app.log       follow by name, across rotation and deletion
 followtail -n 50 -F app.log          the last 50 lines, then follow
 followtail -n +1 -f build.log        the whole file, then follow the open file
+followtail --follow=name --retry x   same as -F (the value is attached with =)
 followtail -F a.log b.log            several files, with ==> name <== headers
 followtail -F app.log --timeout 60   stop following after a minute
 ```
 
-The options and the notices on stderr follow GNU `tail` (`file truncated`, `has been
-replaced;  following new file`, `has become inaccessible`, `has appeared`). Exit status
-is 1 on errors, 130 on Ctrl+C; a closed pipe (`| head`) ends it quietly.
+The options, the output and the notices on stderr follow GNU `tail` (`file
+truncated`, `has been replaced;  following new file`, `has become inaccessible`, `has
+appeared`, directories reported and skipped). A line still being written is shown once
+it has been idle for one interval, as `tail` shows it at once; `--partial wait` prints
+only complete lines. Exit status is 1 on errors, 130 on Ctrl+C; a closed pipe
+(`| head`) ends it quietly.
 
 ## Windows
 
@@ -123,15 +133,19 @@ or truncate a file while it is followed (a reader using the built-in `open()` wo
 block that). Two limits come from Windows itself: a writer that holds its log open with
 the built-in `open()` cannot be renamed under it (use copytruncate, or reopen the log
 after rotating), and replacing the followed name in one step (`os.replace` onto it)
-fails while it is open; rename the old file away, then create the new one.
+fails while it is open; rename the old file away, then create the new one. On file
+systems without POSIX delete semantics (FAT, some network shares) a deleted file keeps
+its name until followtail lets go of it at its next poll, so a writer recreating it in
+that instant may fail once.
 
 ## Why
 
 Tailing a log in Python usually means shelling out to `tail -f` or reaching for
 [`tailer`](https://pypi.org/project/tailer/), which has had no release since 2015,
-ships no type hints and does not survive rotation. followtail behaves like GNU `tail -F`
-(checked against it line for line and notice for notice), loses nothing across a create
-rotation, works the same on Windows, and is `mypy --strict` clean.
+and ships no type hints. followtail behaves like GNU `tail -F` (its tests run both on
+the same files and compare the output byte for byte and the notices word for word),
+loses nothing across a create rotation, works the same on Windows, and is
+`mypy --strict` clean.
 
 More recipes and the exact semantics: [GUIDE.md](GUIDE.md).
 

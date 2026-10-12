@@ -48,8 +48,10 @@ def follow_events(
       it is renamed or deleted. ``retry`` only matters for that first open.
     - Truncation (``copytruncate``) is detected either way: when a file is shorter than
       the read position, reading resumes from its start.
-    - ``retry=False``: a path that cannot be opened is reported once and dropped; the
-      iterator ends when no path is left.
+    - A path that cannot be read is reported as :class:`Missing` with the reason (no
+      such file, permission denied, which includes a file another process holds
+      exclusively, or a directory). With ``retry`` it is tried again on every poll;
+      with ``retry=False`` it is dropped, and the iterator ends when no path is left.
 
     Where to start: at the end (default), at the first byte with ``from_start``, or
     ``lines`` lines before the end (``tail -n``). These apply to files that exist when
@@ -61,7 +63,8 @@ def follow_events(
     unterminated fragment until its newline arrives, or until its file is rotated,
     truncated or deleted; ``partial="flush"`` also emits it once the file has been idle
     for a whole poll, and at a stop. Such fragments have ``complete=False``.
-    ``max_line`` cuts longer lines into fragments of at most that many bytes.
+    ``max_line`` (at least 4) cuts longer lines into fragments of at most that many
+    bytes, never inside a UTF-8 character.
 
     Pacing: after a poll that found nothing the iterator waits ``poll`` seconds with
     ``sleep`` (default ``time.sleep``, or ``stop.wait`` when ``stop`` is a
@@ -70,8 +73,11 @@ def follow_events(
     runs before it ends on a stop or timeout. Otherwise it never ends. Closing the
     generator (or leaving a ``for`` loop) releases the file descriptors.
 
-    Raises ``ValueError`` for invalid settings, ``IsADirectoryError`` for a directory,
-    and other ``OSError`` that is not "the file is not there".
+    Raises ``ValueError`` or ``TypeError`` for invalid settings and
+    ``IsADirectoryError`` for a path that is a directory, both when called. While
+    iterating, an ``OSError`` other than the conditions reported as :class:`Missing`
+    propagates, and so does ``UnicodeDecodeError`` with ``errors="strict"``, after the
+    lines read before the bad one have been yielded.
     """
     follower = Follower(
         paths,
@@ -135,6 +141,10 @@ def follow(
     means the same as there. By default it starts at the end of the file, yields a line
     once its newline has arrived, keeps following across log rotation and never returns;
     pass ``max_idle``, ``stop`` or ``timeout`` to make it end.
+
+    The text of an incomplete fragment (see ``partial`` and ``max_line``, and a line
+    cut short by a rotation, truncation or deletion) is yielded like any line; use
+    :func:`follow_events` and ``Line.complete`` to tell them apart.
 
     >>> for line in follow("/var/log/app.log", lines=10):  # doctest: +SKIP
     ...     print(line)
