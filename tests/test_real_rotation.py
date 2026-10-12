@@ -43,11 +43,14 @@ def test_lines_written_to_the_old_descriptor_after_a_rename_are_not_lost(
     writer = writer_for(log)
     with Follower(log) as follower:
         follower.poll()
+        writer.write("early\n")  # the writer now holds the file open
+        poll_until(follower, lambda got: bool(got))
         log.rename(tmp_path / "app.log.1")
-        writer.write("late\n")  # still holding the old file
+        writer.write("late\n")  # through the old descriptor, after the rename
         log.write_bytes(b"fresh\n")
         events = poll_until(follower, lambda got: len(got) >= 3)
     assert events == [Line(str(log), "late"), Rotated(str(log)), Line(str(log), "fresh")]
+    assert (tmp_path / "app.log.1").read_bytes() == b"early\nlate\n"
 
 
 def test_copytruncate_rotation_is_reported_and_followed(
